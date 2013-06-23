@@ -9,7 +9,7 @@ class BruteZip
   
   attr_reader :file, :dictionary, :resultDir, :forceMethod
   
-  def init(zippedFile=nil,dictionaryFile=nil,resultDir="./unziped")
+  def initialize(zippedFile=nil,dictionaryFile=nil,resultDir="./unziped")
     @file = nil
     @dictionary = nil
     @resultDir = nil 
@@ -19,19 +19,20 @@ class BruteZip
       @file = zippedFile
     end
     
-    if dictionaryFile != nil and Dir.exists?(dictionaryFile)
+    if dictionaryFile != nil and File.exists?(dictionaryFile)
       @forceMethod = "Dictionary" 
       @dictionary = dictionaryFile
     else
       @forceMethod = "Brute Force" 
     end
     
-    if resultDir != nil and Dir.exists?(resultDir)
+    if resultDir != nil and File.exists?(resultDir) and File.directory?(resultDir)
       @resultDir = resultDir
     end    
   end
   
   def forceZip
+    password = "<NOT_FOUND>"
     if (@forceMethod != "Dictionary")
       # Ataque por diccionario
       f = File.open(@dictionary)

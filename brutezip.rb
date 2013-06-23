@@ -48,4 +48,5 @@ end
 # ===================
 
 opts = getArguments
-print opts
+brutezip = BruteZip.new(opts[:file],opts[:dictionary])
+brutezip.forceZip
