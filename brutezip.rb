@@ -49,4 +49,11 @@ end
 
 opts = getArguments
 brutezip = BruteZip.new(opts[:file],opts[:dictionary])
-brutezip.forceZip
+if ((result = brutezip.forceZip) != "<NOT_FOUND>")
+  puts "[SUCESS]: The zip file was unziped with password #{result} :-)"
+  puts "[SUCESS]: Check for the unzipped content in folder #{opts[:result]}!"
+  return 0
+else
+  puts "[FAIL]: It was not possible to unzip the file :-("
+  return 1
+end
