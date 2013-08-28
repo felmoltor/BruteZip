@@ -1,31 +1,33 @@
-#!/usr/bin/env ruby
+#!/usr/bin/ruby
 # https://bitbucket.org/winebarrel/zip-ruby/wiki/Home
+# Zip Specification: http://www.pkware.com/documents/APPNOTE/APPNOTE-6.3.0.TXT
 
 require 'rubygems'
 require 'zipruby'
 require 'filemagic'
 require 'fileutils'
+require 'rainbow'
 
 class BruteZip
   
-  attr_reader :file, :dictionary, :resultDir, :forceMethod
+  attr_reader :file, :dictionary, :resultDir, :forceMethod, :passwordFound, :zipPassword
   
   # =========================
   
-  def initialize(zippedFile=nil,dictionaryFile=nil,resultDir="./unziped")
+  def initialize(zippedFile=nil,dictionaryFile=nil,resultDir=nil)
     @@ZIPMESSAGE = /Zip archive data.*/
     
     @file = nil
     @dictionary = nil
     @resultDir = nil 
     @passwordFound = false
-    @zipPassord = "<NOT_FOUND>"
+    @zipPassword = "<NOT_FOUND>"
     
     fm = FileMagic.new()
     
     if zippedFile != nil and File.exists?(zippedFile)
-      # TODO: Check if it is a zip file
       @file = zippedFile
+      # Check if is realy a zip file
       if (fm.file(@file) =~ @@ZIPMESSAGE).nil?
         raise TypeError.new("File provided is not a zip file")
       end
@@ -39,6 +41,7 @@ class BruteZip
     
     if resultDir != nil
       # TODO: Substract the lasts slashes '/' if specified
+      @resultDir = resultDir
       if !File.exists?(resultDir) or !File.directory?(resultDir)
         FileUtils.mkdir_p(resultDir)
       end
@@ -54,17 +57,17 @@ class BruteZip
   
   # =========================
   
-  def extractAllData(filename)
-    
-    Zip::Archive.open(filename) do |ar|
+  def extractAllData
+    puts "Trying to unzip '#{@file}' in folder '#{@resultDir}'..."
+    Zip::Archive.open(@file) do |ar|
       ar.each do |zf|
         if zf.directory?
-          FileUtils.mkdir_p("#{@resultDir}#{zf.name}")
+          FileUtils.mkdir_p("#{@resultDir}/#{zf.name}")
         else
-          dirname = File.dirname("#{@resultDir}#{zf.name}")
+          dirname = "#{@resultDir}/#{File.dirname(zf.name)}"
           FileUtils.mkdir_p(dirname) unless File.exist?(dirname)
     
-          open(zf.name, 'wb') do |f|
+          open("#{@resultDir}/#{zf.name}", 'wb') do |f|
             f << zf.read
           end
         end
@@ -74,45 +77,85 @@ class BruteZip
   
   # =========================
   
+  # TODO: This should raise a exception to dettect if is password protected (Zip::Error: Read file failed: File encrypted)
+  # but it's failling now, unzip even without password, so think on other 
+  # possible way to check if is password protected.
+  # It seems this method is failing when the zip file contains folders. With a zip file with only one file it raises
+  # an exception and the detection of the password works fine ¿?¿?:doc:
+  # Maybe we can use CRC checking as 7z does. Thus, we need to improve zipruby library
+  
+  def isPasswordProtected?
+    password_protected = true
+    
 =begin
-irb(main):072:0> extractAllData("password.txt.zip")
-Zip::Error: Read file failed: File encrypted
-  from (irb):63:in `read'
-  from (irb):63:in `block (3 levels) in extractAllData'
-  from (irb):62:in `open'
-  from (irb):62:in `block (2 levels) in extractAllData'
-  from (irb):55:in `each'
-  from (irb):55:in `block in extractAllData'
-  from (irb):54:in `open'
-  from (irb):54:in `extractAllData'
-  from (irb):72
-  from /usr/bin/irb:12:in `<main>'
-irb(main):073:0> extractAllData("nopassword.txt.zip")
-=> nil
+    puts "Checking if '#{@file}' is password protected..."
+    
+    Zip::Archive.open(@file) do |ar|
+      ar.each do |zf|
+        if zf.directory?
+          puts "#{zf.name} is a directory"
+          FileUtils.mkdir_p("#{@resultDir}/#{zf.name}")
+        else
+          dirname = "#{@resultDir}/#{File.dirname(zf.name)}"
+          puts "#{zf.name} is a file"
+          FileUtils.mkdir_p(dirname) unless File.exist?(dirname)  
+          
+          open("#{@resultDir}/#{zf.name}", 'wb') do |f|
+            begin
+              f << zf.read
+            rescue => e
+              puts "Exception: #{e.message}"
+              if e.message == "Read file failed: File encrypted"
+                password_protected = true
+              else
+                puts "Unknown error ocurred when uncompressing the file #{zf.name}."
+              end
+              break
+            end # begin - rescue
+          end # open
+        end # if zf.directory? - else 
+      end # ar.each
+    end # Zip::Archive.open
+    
+    # Detele the created folders
+    FileUtils.remove_dir(@resultDir,force=true) 
 =end
+    return password_protected    
+  end
+  
+  # =========================
   
   def forceZip
     password = "<NOT_FOUND>"
+    sucess = false
     
     # First, trying to unzip without a password
-    if extractAllData().nil?
-      # No password needed and it was correctly extracted
-    else
+    if isPasswordProtected?
       # If failed, then is password protected: Force
+      # puts "Yep. This file is password protected, using dictionary attack..."
       dfile = File.open(@dictionary)
       dfile.each { |password|
-        print "Trying to unzip with '#{password}'"
-        sucess = Zip::Archive.decrypt(@file, password) # return true if decrypted
-        if (success)
-          @passwordFound = true
-          @zipPassord = password
-          break
+        password.chomp!
+        print "Trying to decrypt with '#{password}' "
+        begin
+          if (Zip::Archive.decrypt(@file, password))
+            puts "\t[SUCCESS]".color(:green)
+            @passwordFound = true
+            @zipPassword = password
+            break
+          else
+            puts "\t[FAILED]".color(:red)
+          end
+        rescue => e_decrypt
+          # puts e_decrypt.message # "Decrypt archive failed - test/password_dir.zip: Wrong password"
+          puts "\t[FAILED]".color(:red)
         end
       }
       dfile.close
+    else
+      puts "This file was not password protected!"
     end
-    
-    
+
     return password
   end
   

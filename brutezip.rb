@@ -1,4 +1,4 @@
-#!/usr/bin/ruby1.8
+#!/usr/bin/ruby
 
 require 'rubygems'
 require './include/BruteZip.rb'
@@ -8,52 +8,56 @@ def getArguments
   # This hash will hold all of the options
   # parsed from the command-line by
   # OptionParser.
-  options = {:file => nil, :dictionary => nil, :result => "./unziped"}
+  options = {:file => nil, :dictionary => nil, :result => "unziped", :nthreads => 1}
   
   optparse = OptionParser.new do |opts|
-    opts.on( '-f', '--file FILE', 'Zipped file protected with the password to guess' ) do |file|
+    opts.on( '-f', '--file FILE', 'Zipped file protected with the password to guess (Mandatory)') do |file|
       options[:file] = file
     end
-    opts.on( '-d', '--dictionary DICTIONARY', 'Dictionary file to use against the zipped file.' ) do |dict|
+    opts.on( '-d', '--dictionary DICTIONARY', 'Dictionary file to use against the zipped file (Mandatory)' ) do |dict|
       options[:dictionary] = dict
     end
     opts.on( '-r', '--resultdir [RESULTDIR]', 'Directory where the result of unzipping the file will be stored' ) do |result|
       options[:result] = result
     end
-=begin
-    opts.on( '-s', '--set [BRUTE_SET]', [:NUMERIC,:ALPHA,:APHANUMERIC,:ALPHASPEC,:ALPHANUMSPEC], 'Use brute force method instead of dictionary method.' ) do
-      puts opts
-      exit
+    opts.on( '-t', '--threads [NTHREADS]', 'Number of threads to bruteforce the password' ) do |nthreads|
+      options[:nthreads] = nthreads
     end
-    opts.on( '-c', '--case [CASE]', [:UPPER,:LOW,:MIXED], 'In case of brute force method, set the case preferences when using chars' ) do
-      puts opts
-      exit
-    end
-=end
     opts.on( '-h', '--help', 'Display this screen' ) do
       print opts
       exit
     end
   end
   
-  # Parse the command-line. Remember there are two forms
-  # of the parse method. The 'parse' method simply parses
-  # ARGV, while the 'parse!' method parses ARGV and removes
-  # any options found there, as well as any parameters for
-  # the options. What's left is the list of files to resize.
   optparse.parse!(ARGV)
+  
+  if options[:file].nil? or options[:dictionary].nil?
+    $stderr.puts "Arguments provided are not enough. Check mandatory fields"
+    puts optparse
+    exit(1)
+  end
+  
   options
 end
 
 # ===================
 
 opts = getArguments
-brutezip = BruteZip.new(opts[:file],opts[:dictionary])
-if ((result = brutezip.forceZip) != "<NOT_FOUND>")
-  puts "[SUCESS]: The zip file was unziped with password #{result} :-)"
-  puts "[SUCESS]: Check for the unzipped content in folder #{opts[:result]}!"
-  return 0
+
+brutezip = BruteZip.new(opts[:file],opts[:dictionary],opts[:result])
+
+if brutezip.isPasswordProtected?
+  brutezip.forceZip
+  if (brutezip.passwordFound)
+    brutezip.extractAllData
+    puts "[SUCESS]:".color(:green) + " The zip file was unziped with password '#{brutezip.zipPassword}' :-)"
+    puts "[SUCESS]:".color(:green) + " Check for the unzipped content in folder #{opts[:result]}!"
+  else
+    puts "[FAIL]:".color(:red) + " It was not possible to unzip the file :-("
+  end
 else
-  puts "[FAIL]: It was not possible to unzip the file :-("
-  return 1
+  puts "This file does not seems to be password protected. Unziping it"
+  brutezip.extractAllData
 end
+
+
