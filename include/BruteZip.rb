@@ -10,7 +10,7 @@ require 'rainbow'
 
 class BruteZip
   
-  attr_reader :file, :dictionary, :resultDir, :forceMethod, :passwordFound, :zipPassword
+  attr_reader :file, :dictionary, :dictionarysize, :processingline, :resultDir, :forceMethod, :passwordFound, :zipPassword
   
   # =========================
   
@@ -19,6 +19,8 @@ class BruteZip
     
     @file = nil
     @dictionary = nil
+    @dictionarysize = 0
+    @processingline = 0
     @resultDir = nil 
     @passwordFound = false
     @zipPassword = "<NOT_FOUND>"
@@ -35,6 +37,8 @@ class BruteZip
     
     if dictionaryFile != nil and File.exists?(dictionaryFile)
       @dictionary = dictionaryFile
+      # Read dictionary size
+      @dictionarysize = %x{wc -l '#{@dictionary}'}.split.first.to_i # Will only work in Unix like SO
     else
       raise ArgumentError.new("Dictionary file does not exist")
     end
@@ -51,7 +55,7 @@ class BruteZip
   
   # =========================
   
-  def printProgress
+  def getProgress
     # TODO: Print out the word being used to unzip and percentage
   end
   
@@ -134,8 +138,10 @@ class BruteZip
       # If failed, then is password protected: Force
       # puts "Yep. This file is password protected, using dictionary attack..."
       dfile = File.open(@dictionary)
+      @processingline = 0
       dfile.each { |password|
         password.chomp!
+        @processingline += 1
         print "Trying to decrypt with '#{password}' "
         begin
           if (Zip::Archive.decrypt(@file, password))

@@ -20,7 +20,7 @@ def getArguments
     opts.on( '-r', '--resultdir [RESULTDIR]', 'Directory where the result of unzipping the file will be stored' ) do |result|
       options[:result] = result
     end
-    opts.on( '-t', '--threads [NTHREADS]', 'Number of threads to bruteforce the password' ) do |nthreads|
+    opts.on( '-t', '--threads [NTHREADS]', Integer, 'Number of threads to bruteforce the password' ) do |nthreads|
       options[:nthreads] = nthreads
     end
     opts.on( '-h', '--help', 'Display this screen' ) do
@@ -42,22 +42,65 @@ end
 
 # ===================
 
+def calculateDictionaryOffsets(dictionary,nparts)
+  dictionarysize = %x{wc -l '#{dictionary}'}.split.first.to_i
+  last_offset = 0
+  dic_offsets = [[0,dictionarysize]]
+  
+  if (nparts > 1)
+    dic_offsets = []
+    # Calclulate offsets for each thread
+    chunk_size = dictionarysize/nparts
+    last_chunk_size = dictionarysize%nparts
+    
+    nparts.times {|part_n|
+      # If this is not the last chunk
+      if part_n < (nparts-1)
+        dic_offsets[part_n] = [last_offset,last_offset+chunk_size]
+        last_offset = last_offset + chunk_size
+      else
+        dic_offsets[part_n] = [last_offset,last_offset+chunk_size+last_chunk_size]
+        last_offset = last_offset+chunk_size+last_chunk_size
+      end
+    }
+  end # if (nparts > 1)
+  return dic_offsets
+end
+
+# ===================
+
+def distributeDictionaryFile(dictionary,offsets)
+  puts "STUB: Distributing dictionary file..."
+end
+
+# ===================
+# ====== MAIN =======
+# ===================
+
 opts = getArguments
 
-brutezip = BruteZip.new(opts[:file],opts[:dictionary],opts[:result])
+# Split in N threads when brute forcing
+# Separate the dictionary in N sets and distribute to each thread
+puts "Calculating dictionary chunks to distribute to the threads..."
+offsets = calculateDictionaryOffsets(opts[:dictionary],opts[:nthreads])
+distributeDictionaryFile(opts[:dictionary],offsets)
 
-if brutezip.isPasswordProtected?
+# TODO: Create static method to check if is password protected
+# if BruteZip.isPasswordProtected?(opts[:file])
+  # Create N threads
+  brutezip = BruteZip.new(opts[:file],opts[:dictionary],opts[:result])
   brutezip.forceZip
+  
   if (brutezip.passwordFound)
     brutezip.extractAllData
     puts "[SUCESS]:".color(:green) + " The zip file was unziped with password '#{brutezip.zipPassword}' :-)"
-    puts "[SUCESS]:".color(:green) + " Check for the unzipped content in folder #{opts[:result]}!"
+    puts "[SUCESS]:".color(:green) + " Check for the unzipped content in folder '#{opts[:result]}'!"
+    # TODO: Send stop signal to the other threads and store password
   else
     puts "[FAIL]:".color(:red) + " It was not possible to unzip the file :-("
   end
-else
-  puts "This file does not seems to be password protected. Unziping it"
-  brutezip.extractAllData
-end
-
-
+  # TODO: Join all the threads and check if password was found
+# else
+#  puts "This file does not seems to be password protected. Unziping it"
+#  brutezip.extractAllData
+#end
