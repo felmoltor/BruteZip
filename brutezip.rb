@@ -69,8 +69,29 @@ end
 
 # ===================
 
-def distributeDictionaryFile(dictionary,offsets)
+def distributeDictionaryFile(dictionary,nthreads)
   puts "STUB: Distributing dictionary file..."
+  offsets = calculateDictionaryOffsets(dictionary,nthreads)
+  # Create N files
+  
+  dict = File.open(dictionary,"r")
+  nline = 0
+  dict.each { |line|
+    ndict = 0
+    for offset in offsets
+      ndict += 1
+      if nline = offset[0]
+        subdict = File.open(".#{dictionary}.#{ndict}","w")
+      end
+      if nline > offset[0] and nline < offset[1]
+        subdict.puts line
+      end
+    end
+    if nline = offset[1]
+      subdict.close
+    end
+  }
+  c = gets
 end
 
 # ===================
@@ -82,8 +103,7 @@ opts = getArguments
 # Split in N threads when brute forcing
 # Separate the dictionary in N sets and distribute to each thread
 puts "Calculating dictionary chunks to distribute to the threads..."
-offsets = calculateDictionaryOffsets(opts[:dictionary],opts[:nthreads])
-distributeDictionaryFile(opts[:dictionary],offsets)
+distributeDictionaryFile(opts[:dictionary],opts[:nthreads]) #offsets)
 
 # TODO: Create static method to check if is password protected
 # if BruteZip.isPasswordProtected?(opts[:file])
