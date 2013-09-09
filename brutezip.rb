@@ -3,6 +3,7 @@
 require 'rubygems'
 require './include/BruteZip.rb'
 require 'optparse'
+require 'pp'
 
 def getArguments
   # This hash will hold all of the options
@@ -42,6 +43,26 @@ end
 
 # ===================
 
+def printBanner
+  banner = %q{
+  ____             _       _______              __   ___  
+ |  _ \           | |     |___  (_)            /_ | / _ \ 
+ | |_) |_ __ _   _| |_ ___   / / _ _ __   __   _| || | | |
+ |  _ <| '__| | | | __/ _ \ / / | | '_ \  \ \ / / || | | |
+ | |_) | |  | |_| | ||  __// /__| | |_) |  \ V /| || |_| |
+ |____/|_|   \__,_|\__\___/_____|_| .__/    \_/ |_(_)___/ 
+                                  | |                     
+                                  |_|                     
+
+  Author: Felipe Molina (https://twitter.com/felmoltor)
+  Date: 09/2013
+  
+  }
+  puts banner.color(:blue)
+end
+
+# ===================
+
 def calculateDictionaryOffsets(dictionary,nparts)
   dictionarysize = %x{wc -l '#{dictionary}'}.split.first.to_i
   last_offset = 0
@@ -69,57 +90,104 @@ end
 
 # ===================
 
+# TODO: Use seek method instead of counting lines of the dictionary
 def distributeDictionaryFile(dictionary,nthreads)
-  puts "STUB: Distributing dictionary file..."
   offsets = calculateDictionaryOffsets(dictionary,nthreads)
-  # Create N files
+  subdictionaries = []
+  subdict = nil
+  ndict = 0
   
-  dict = File.open(dictionary,"r")
-  nline = 0
-  dict.each { |line|
-    ndict = 0
-    for offset in offsets
-      ndict += 1
-      if nline = offset[0]
-        subdict = File.open(".#{dictionary}.#{ndict}","w")
+  # Create N files with the subdictionaries
+  for offset in offsets
+    dict = File.open(dictionary,"r")
+    nline = 0
+    ndict += 1
+    
+    dict.each { |line|
+      if nline == offset[0]
+        subdict = File.new("#{File.dirname(dictionary)}#{File::SEPARATOR}.#{File.basename(dictionary)}.#{ndict}","w")
+        subdictionaries << subdict.path
       end
+      
       if nline > offset[0] and nline < offset[1]
-        subdict.puts line
+        subdict.puts line.chomp
       end
-    end
-    if nline = offset[1]
-      subdict.close
-    end
-  }
-  c = gets
+      
+      # If is the last line of the subdictionary
+      if nline == offset[1] - 1
+        subdict.close
+        break
+      end
+      nline += 1
+    }
+    dict.close
+  end # Del for offset in offsets
+  
+  return subdictionaries
+end
+
+# ===================
+
+def freeSubdictionaryFiles(subdicts)
+  for subdict in subdicts
+    File.delete(subdict)
+  end
 end
 
 # ===================
 # ====== MAIN =======
 # ===================
 
+is_password_found = false
+password_found = "<NOT_FOUND>"
+
 opts = getArguments
+printBanner
 
 # Split in N threads when brute forcing
 # Separate the dictionary in N sets and distribute to each thread
-puts "Calculating dictionary chunks to distribute to the threads..."
-distributeDictionaryFile(opts[:dictionary],opts[:nthreads]) #offsets)
+puts "Splitting the dicctionary to the threads..."
+subdicts = distributeDictionaryFile(opts[:dictionary],opts[:nthreads])
 
 # TODO: Create static method to check if is password protected
 # if BruteZip.isPasswordProtected?(opts[:file])
-  # Create N threads
-  brutezip = BruteZip.new(opts[:file],opts[:dictionary],opts[:result])
-  brutezip.forceZip
-  
-  if (brutezip.passwordFound)
-    brutezip.extractAllData
-    puts "[SUCESS]:".color(:green) + " The zip file was unziped with password '#{brutezip.zipPassword}' :-)"
-    puts "[SUCESS]:".color(:green) + " Check for the unzipped content in folder '#{opts[:result]}'!"
-    # TODO: Send stop signal to the other threads and store password
-  else
-    puts "[FAIL]:".color(:red) + " It was not possible to unzip the file :-("
+# Create N threads
+puts "Bruteforcing the password with #{opts[:nthreads]} threads. Please wait..."
+threads = []
+opts[:nthreads].times { |t|
+  threads << Thread.new(t) do
+    
+    Thread.current[:success] = is_password_found
+    Thread.current[:password] = password_found
+      
+    brutezip = BruteZip.new(opts[:file],subdicts[t],opts[:result])
+    brutezip.forceZip
+    
+    if (brutezip.passwordFound)
+      # TODO: Send stop signal to the other threads and store password and save time
+      brutezip.extractAllData
+      Thread.current[:success] = true
+      Thread.current[:password] = brutezip.zipPassword
+    end
   end
-  # TODO: Join all the threads and check if password was found
+  threads[t].join
+  
+  # Check if any thread found the password
+  if threads[t][:success]
+    is_password_found = true
+    password_found = threads[t][:password]
+  end
+}
+
+puts "******************************"
+if is_password_found
+  puts "* " + "[SUCESS]: ".color(:green) + " The zip file was unziped with password '#{password_found}' :-)"
+else
+  puts "* " + "[FAIL]: ".color(:red) + " It was not possible to unzip the file :-("
+end  
+puts "******************************"
+
+freeSubdictionaryFiles(subdicts)
 # else
 #  puts "This file does not seems to be password protected. Unziping it"
 #  brutezip.extractAllData
