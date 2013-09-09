@@ -62,7 +62,7 @@ class BruteZip
   # =========================
   
   def extractAllData
-    puts "Trying to unzip '#{@file}' in folder '#{@resultDir}'..."
+    # puts "Trying to unzip '#{@file}' in folder '#{@resultDir}'..."
     Zip::Archive.open(@file) do |ar|
       ar.each do |zf|
         if zf.directory?
@@ -142,19 +142,19 @@ class BruteZip
       dfile.each { |password|
         password.chomp!
         @processingline += 1
-        print "Trying to decrypt with '#{password}' "
+        # print "Trying to decrypt with '#{password}' "
         begin
           if (Zip::Archive.decrypt(@file, password))
-            puts "\t[SUCCESS]".color(:green)
+            # puts "\t[SUCCESS]".color(:green)
             @passwordFound = true
             @zipPassword = password
             break
           else
-            puts "\t[FAILED]".color(:red)
+            # puts "\t[FAILED]".color(:red)
           end
         rescue => e_decrypt
           # puts e_decrypt.message # "Decrypt archive failed - test/password_dir.zip: Wrong password"
-          puts "\t[FAILED]".color(:red)
+          # puts "\t[FAILED]".color(:red)
         end
       }
       dfile.close
